@@ -1,0 +1,9 @@
+CMakeCache.txt
+CMakeFiles/
+Doxyfile
+Makefile
+cmake_install.cmake
+html/
+libdaio.bin
+libdaio.so
+libdaio_example
