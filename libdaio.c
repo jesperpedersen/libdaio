@@ -313,6 +313,18 @@ daio_deregister_file(int fd)
 }
 
 int
+daio_get_available_slots()
+{
+   int num = 0;
+
+   pthread_mutex_lock(&engine->lock);
+   num = engine->channels - engine->in_use;
+   pthread_mutex_unlock(&engine->lock);
+
+   return num;
+}
+
+int
 daio_submit_read(int fd, long page, int* slot)
 {
    int sl = -1;

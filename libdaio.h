@@ -65,6 +65,13 @@ int
 daio_deregister_file(int fd);
 
 /**
+ * Get the number of available slots
+ * @return The value
+ */
+int
+daio_get_available_slots();
+
+/**
  * Submit a read request
  * @param fd The file descriptor
  * @param page The page of the file
