@@ -24,6 +24,10 @@
 #ifndef LIBDAIO_H
 #define LIBDAIO_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -110,5 +114,9 @@ daio_write_buffer(void** buffer, size_t* count);
  */
 int
 daio_submit_write(int fd, void* buffer, size_t count, long page);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
