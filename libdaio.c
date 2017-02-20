@@ -92,15 +92,19 @@ is_empty()
 
 /**
  * Acquire a slot. The lock must be owned
+ * @param extra Can an additional slot be requested
  * @return The slot number, or -1 if none available
  */
 static int
-acquire_slot()
+acquire_slot(int extra)
 {
    int i;
+   int to;
    int slot = -1;
 
-   for (i = 0; i < engine->channels && slot == -1; i++)
+   to = engine->channels + extra;
+
+   for (i = 0; i < to && slot == -1; i++)
    {
       if (engine->slots[i] == 0)
       {
@@ -109,7 +113,7 @@ acquire_slot()
       }
    }
 
-   if (slot != -1)
+   if (slot != -1 && !extra)
       engine->in_use++;
    
    return slot;
@@ -118,13 +122,15 @@ acquire_slot()
 /**
  * Release a slot. The lock must be owned
  * @param slot The slot number
+ * @param extra Can an additional slot be requested
  * @return The number of used slots
  */
 static int
-release_slot(int slot)
+release_slot(int slot, int extra)
 {
    engine->slots[slot] = 0;
-   engine->in_use--;
+   if (!extra)
+      engine->in_use--;
 
    return engine->in_use;
 }
@@ -158,6 +164,7 @@ int
 daio_initialize(size_t bs, long chns, int sc)
 {
    int i;
+   int c;
    int res;
 
    // Verify block_size >= 512 and block_size % 512 == 0
@@ -172,33 +179,36 @@ daio_initialize(size_t bs, long chns, int sc)
    if (sc < 0 || sc > 2)
       return -1;
 
+   // Allocate an extra slot in case of sync usage
+   c = sc == 0 ? chns : chns + 1;
+
    pthread_mutex_t l;
    res = pthread_mutex_init(&l, NULL);
    if (res < 0)
       return res;
-   
+
    io_context_t ctx;
    memset(&ctx, 0, sizeof(ctx));
-   res = io_setup(chns, &ctx);   
+   res = io_setup(c, &ctx);
    if (res < 0)
       return res;
 
-   int* ss = (int*)malloc((sizeof(int) * (size_t)chns));
+   int* ss = (int*)malloc((sizeof(int) * (size_t)c));
    if (ss == NULL)
       return -1;
-   memset(ss, 0, sizeof(int) * (size_t)chns);
+   memset(ss, 0, sizeof(int) * (size_t)c);
 
-   for (i = 0; i < chns; i++)
+   for (i = 0; i < c; i++)
    {
       ss[i] = 0;
    }
    
-   struct iocb** cbs = (struct iocb**)malloc((sizeof(struct iocb*) * (size_t)chns));
+   struct iocb** cbs = (struct iocb**)malloc((sizeof(struct iocb*) * (size_t)c));
    if (cbs == NULL)
       return -1;
-   memset(cbs, 0, sizeof(struct iocb*) * (size_t)chns);
+   memset(cbs, 0, sizeof(struct iocb*) * (size_t)c);
 
-   for (i = 0; i < chns; i++)
+   for (i = 0; i < c; i++)
    {
       cbs[i] = (struct iocb *)malloc(sizeof(struct iocb));
       if (cbs[i] == NULL)
@@ -208,17 +218,17 @@ daio_initialize(size_t bs, long chns, int sc)
       memset(cbs[i], 0, sizeof(struct iocb));
    }
 
-   struct io_event* evts = (struct io_event *)malloc(sizeof(struct io_event) * (size_t)chns);
+   struct io_event* evts = (struct io_event *)malloc(sizeof(struct io_event) * (size_t)c);
    if (evts == NULL)
       return -1;
-   memset(evts, 0, sizeof(struct io_event) * (size_t)chns);
+   memset(evts, 0, sizeof(struct io_event) * (size_t)c);
 
-   void** ds = (void**)malloc((sizeof(void*) * (size_t)chns));
+   void** ds = (void**)malloc((sizeof(void*) * (size_t)c));
    if (ds == NULL)
       return -1;
-   memset(ds, 0, sizeof(void *) * (size_t)chns);
+   memset(ds, 0, sizeof(void *) * (size_t)c);
 
-   for (i = 0; i < chns; i++)
+   for (i = 0; i < c; i++)
    {
       res = posix_memalign(&ds[i], (size_t)sysconf(_SC_PAGESIZE), bs);
       if (res < 0 || ds[i] == 0)
@@ -247,17 +257,20 @@ int
 daio_destroy()
 {
    int i;
+   int c;
    int res1 = -1, res2 = -1;
 
    if (engine)
    {
+      c = engine->sync == 0 ? engine->channels : engine->channels + 1;
+
       res1 = pthread_mutex_destroy(&engine->lock);
 
       res2 = io_destroy(engine->context);
 
       if (engine->iocbs)
       {
-         for (i = 0; i < engine->channels; i++)
+         for (i = 0; i < c; i++)
          {
             free(engine->iocbs[i]);
          }
@@ -265,7 +278,7 @@ daio_destroy()
 
       if (engine->data)
       {
-         for (i = 0; i < engine->channels; i++)
+         for (i = 0; i < c; i++)
          {
             free(engine->data[i]);
          }
@@ -331,7 +344,7 @@ daio_submit_read(int fd, long page, int* slot)
 
    pthread_mutex_lock(&engine->lock);
    if (!engine->ready)
-      sl = acquire_slot();
+      sl = acquire_slot(0);
    pthread_mutex_unlock(&engine->lock);
 
    if (sl != -1)
@@ -383,7 +396,7 @@ daio_read_slot(int slot, void** data, size_t* count)
       if (i < 0 || engine->data[slot] == 0)
       {
          pthread_mutex_lock(&engine->lock);
-         if (release_slot(slot) == 0)
+         if (release_slot(slot, 0) == 0)
             engine->ready = 0;
          pthread_mutex_unlock(&engine->lock);
 
@@ -392,7 +405,7 @@ daio_read_slot(int slot, void** data, size_t* count)
       memset(engine->data[slot], 0, engine->block_size);
    
       pthread_mutex_lock(&engine->lock);
-      if (release_slot(slot) == 0)
+      if (release_slot(slot, 0) == 0)
          engine->ready = 0;
       pthread_mutex_unlock(&engine->lock);
 
@@ -434,6 +447,7 @@ daio_submit_write(int fd, void* buffer, size_t count, long page)
 {
    int res, rdy;
    int write_slot = -1;
+   int sync_slot = -1;
 
    pthread_mutex_lock(&engine->lock);
    rdy = engine->ready;
@@ -443,28 +457,33 @@ daio_submit_write(int fd, void* buffer, size_t count, long page)
       return -1;
    
    pthread_mutex_lock(&engine->lock);
-   write_slot = acquire_slot();
+   write_slot = acquire_slot(0);
 
    if (write_slot != -1)
    {
       io_prep_pwrite(engine->iocbs[write_slot], fd, buffer, count, (long long)page * engine->block_size);
 
-      res = process();
-      if (res >= 0)
+      if (engine->sync != 0)
       {
-         // io_prep_fsync / io_prep_fdsync doesn't get submitted in io_submit
+         sync_slot = acquire_slot(1);
+
          if (engine->sync == 1)
          {
-            fsync(fd);
+            io_prep_fsync(engine->iocbs[sync_slot], fd);
          }
          else if (engine->sync == 2)
          {
-            fdatasync(fd);
+            io_prep_fdsync(engine->iocbs[sync_slot], fd);
          }
+      }
 
-         release_slot(write_slot);
+      res = process();
+      if (res >= 0)
+      {
+         if (sync_slot != -1)
+            release_slot(sync_slot, 1);
 
-         if (!is_empty())
+         if (release_slot(write_slot, 0) != 0)
             engine->ready = 1;
       
          pthread_mutex_unlock(&engine->lock);
