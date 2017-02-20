@@ -117,17 +117,16 @@ acquire_slot()
 
 /**
  * Release a slot. The lock must be owned
- * @param slot The slot number, or -1 if none available
+ * @param slot The slot number
+ * @return The number of used slots
  */
 static int
 release_slot(int slot)
 {
-   int res;
-
    engine->slots[slot] = 0;
-   res = engine->in_use--;
+   engine->in_use--;
 
-   return res;
+   return engine->in_use;
 }
 
 /**
