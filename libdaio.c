@@ -424,7 +424,7 @@ int
 daio_write_buffer(void** data, size_t* count)
 {
    int res;
-   void* d;
+   void* d = NULL;
    size_t c;
 
    c = engine->block_size;
