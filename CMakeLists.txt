@@ -24,7 +24,7 @@ cmake_minimum_required (VERSION 2.8)
 set(PROJECT_NAME daio)
 project (${PROJECT_NAME})
 
-set(CMAKE_C_FLAGS "-g -Wall")
+set(CMAKE_C_FLAGS "-g -O2 -Wall")
 
 find_path(LIBAIO_INCLUDE_DIR libaio.h HINTS PATH_SUFFIXES include)
 find_library(LIBAIO_LIBRARY aio HINTS PATH_SUFFIXES lib)
