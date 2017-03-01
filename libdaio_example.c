@@ -160,4 +160,6 @@ main(int argc, char* argv[])
       exit(1);
    }
    printf("libdaio_example: destroyed\n");
+
+   return 0;
 }
