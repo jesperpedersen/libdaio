@@ -40,8 +40,8 @@ void* data;
 size_t count;
 int slot;
 
-// Initialize the libdaio library with 8k block size, 4 channels and fsync
-daio_initialize((size_t)8192, (long)4, 1);
+// Initialize the libdaio library with 8k block size, 4 channels and fdatasync
+daio_initialize((size_t)8192, (long)4, 2);
 
 // Create and open a file using O_DIRECT with 644 permissions
 fd = daio_register_file("./libdaio.bin", S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);

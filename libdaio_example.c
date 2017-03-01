@@ -41,8 +41,8 @@ main(int argc, char* argv[])
    int fd;
    int slot1, slot2;
 
-   // Initialize the libdaio library with 8k block size, 4 channels and fsync
-   res = daio_initialize((size_t)8192, (long)4, 1);
+   // Initialize the libdaio library with 8k block size, 4 channels and fdatasync
+   res = daio_initialize((size_t)8192, (long)4, 2);
    if (res < 0)
    {
       printf("daio_initialize failed: %d\n", res);
